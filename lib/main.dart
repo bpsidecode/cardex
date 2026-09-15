@@ -46,7 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override Widget build(BuildContext context) {
     final pages = [DiscoverPage(service: widget.service), ExplorePage(service: widget.service), CollectionPage(service: widget.service)];
     return Scaffold(
-      body: SafeArea(child: pages[index]),
+      body: SafeArea(child: IndexedStack(index: index, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (value) => setState(() => index = value),
@@ -66,34 +66,83 @@ class DiscoverPage extends StatefulWidget {
   @override State<DiscoverPage> createState() => _DiscoverPageState();
 }
 
+enum _BrandSort {
+  alphabetical('Alphabetical'),
+  country('Country of origin'),
+  parentCompany('Parent company');
+
+  const _BrandSort(this.label);
+  final String label;
+}
+
 class _DiscoverPageState extends State<DiscoverPage> {
   String query = '';
+  _BrandSort sort = _BrandSort.alphabetical;
+
+  int compareBrands(CarBrand a, CarBrand b) {
+    final catalog = widget.service.catalog;
+    final comparison = switch (sort) {
+      _BrandSort.alphabetical => 0,
+      _BrandSort.country => catalog.country(a.originCountryId).name.compareTo(catalog.country(b.originCountryId).name),
+      _BrandSort.parentCompany => catalog.group(a.groupId).name.compareTo(catalog.group(b.groupId).name),
+    };
+    return comparison != 0 ? comparison : a.name.compareTo(b.name);
+  }
+
   @override Widget build(BuildContext context) {
-    final brands = widget.service.catalog.brands.where((brand) => brand.name.toLowerCase().contains(query.toLowerCase())).toList()..sort((a, b) => a.name.compareTo(b.name));
+    final brands = widget.service.catalog.brands.where((brand) => brand.name.toLowerCase().contains(query.toLowerCase())).toList()..sort(compareBrands);
     return Column(children: [
       const _PageTitle(title: 'Discover', subtitle: 'What did you spot today?'),
       Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: SearchBar(
         hintText: 'Search car brands', leading: const Icon(Icons.search),
         onChanged: (value) => setState(() => query = value),
       )),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: PopupMenuButton<_BrandSort>(
+            tooltip: 'Sort brands',
+            initialValue: sort,
+            onSelected: (value) => setState(() => sort = value),
+            itemBuilder: (_) => _BrandSort.values.map((value) => CheckedPopupMenuItem(
+              value: value,
+              checked: sort == value,
+              child: Text(value.label),
+            )).toList(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.sort),
+                const SizedBox(width: 8),
+                Text('Sort: ${sort.label}'),
+                const Icon(Icons.arrow_drop_down),
+              ]),
+            ),
+          ),
+        ),
+      ),
       Expanded(child: ListView.separated(
         itemCount: brands.length, separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (_, i) => BrandTile(brand: brands[i], service: widget.service),
+        itemBuilder: (_, i) => BrandTile(brand: brands[i], service: widget.service, showParentCompany: sort == _BrandSort.parentCompany),
       )),
     ]);
   }
 }
 
 class BrandTile extends StatelessWidget {
-  const BrandTile({super.key, required this.brand, required this.service});
+  const BrandTile({super.key, required this.brand, required this.service, this.showParentCompany = false});
   final CarBrand brand;
   final CollectionService service;
+  final bool showParentCompany;
   @override Widget build(BuildContext context) {
     final collected = service.isCollected(brand.id);
     final country = service.catalog.country(brand.originCountryId);
     return ListTile(
       leading: BrandMark(name: brand.name, collected: collected),
-      title: Text(brand.name), subtitle: Text('${country.flag} ${country.name} · ${brand.foundedYear}'),
+      title: Text(brand.name), subtitle: Text(showParentCompany
+        ? service.catalog.group(brand.groupId).name
+        : '${country.flag} ${country.name} · ${brand.foundedYear}'),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => BrandDetailPage(brand: brand, service: service))),
       trailing: IconButton(
         tooltip: collected ? 'Remove ${brand.name}' : 'Collect ${brand.name}',
@@ -143,7 +192,7 @@ class ExplorePage extends StatelessWidget {
   const ExplorePage({super.key, required this.service});
   final CollectionService service;
   @override Widget build(BuildContext context) {
-    final badges = service.catalog.badges..sort((a, b) => a.title.compareTo(b.title));
+    final badges = service.catalog.badges.toList()..sort((a, b) => a.title.compareTo(b.title));
     final makers = badges.where((b) => b.kind == BadgeKind.manufacturer).toList();
     final countries = badges.where((b) => b.kind == BadgeKind.country).toList();
     return ListView(children: [
@@ -159,8 +208,12 @@ class _SetSection extends StatelessWidget {
   final String title;
   final List<Badge> badges;
   final CollectionService service;
-  @override Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 6), child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
+  @override Widget build(BuildContext context) => ExpansionTile(
+    key: PageStorageKey(title),
+    initiallyExpanded: false,
+    title: Text(title, style: Theme.of(context).textTheme.titleLarge),
+    subtitle: Text('${badges.length} collections'),
+    children: [
     ...badges.map((badge) {
       final all = service.brandsForBadge(badge);
       final missing = service.missingForBadge(badge);
