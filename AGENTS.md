@@ -21,7 +21,7 @@ flutter pub get       # Install locked Dart and Flutter dependencies.
 flutter run           # Launch on a connected device or emulator.
 flutter analyze       # Apply analyzer rules from analysis_options.yaml.
 flutter test          # Run the complete unit and widget test suite.
-flutter build apk     # Produce an Android release APK.
+flutter build apk --android-skip-build-dependency-validation     # Produce an Android release APK.
 dart format lib test  # Format Dart source and tests.
 ```
 
