@@ -213,10 +213,11 @@ class BrandTile extends StatelessWidget {
             return;
           }
 
+          final navigator = Navigator.of(context);
           await service.toggle(brand);
-          if (!context.mounted) return;
+          if (!navigator.mounted) return;
           await _showNewFindCelebration(
-            context,
+            navigator,
             brand: brand,
             service: service,
           );
@@ -227,12 +228,12 @@ class BrandTile extends StatelessWidget {
 }
 
 Future<void> _showNewFindCelebration(
-  BuildContext context, {
+  NavigatorState navigator, {
   required CarBrand brand,
   required CollectionService service,
   bool returnToCurrentPage = false,
 }) =>
-    Navigator.of(context).push(
+    navigator.push(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 250),
         reverseTransitionDuration: const Duration(milliseconds: 200),
@@ -507,10 +508,11 @@ class BrandDetailPage extends StatelessWidget {
               return;
             }
 
+            final navigator = Navigator.of(context);
             await service.toggle(brand);
-            if (!context.mounted) return;
+            if (!navigator.mounted) return;
             await _showNewFindCelebration(
-              context,
+              navigator,
               brand: brand,
               service: service,
               returnToCurrentPage: true,
