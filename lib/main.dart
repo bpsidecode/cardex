@@ -73,8 +73,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final pages = [
       DiscoverPage(service: widget.service),
-      ExplorePage(service: widget.service),
-      CollectionPage(service: widget.service)
+      CollectionsPage(service: widget.service),
+      BadgesPage(service: widget.service)
     ];
     return Scaffold(
       body: SafeArea(child: IndexedStack(index: index, children: pages)),
@@ -84,13 +84,13 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.search), label: 'Discover'),
           NavigationDestination(
-              icon: Icon(Icons.explore_outlined),
-              selectedIcon: Icon(Icons.explore),
-              label: 'Explore'),
+              icon: Icon(Icons.grid_view_outlined),
+              selectedIcon: Icon(Icons.grid_view),
+              label: 'Collections'),
           NavigationDestination(
               icon: Icon(Icons.workspace_premium_outlined),
               selectedIcon: Icon(Icons.workspace_premium),
-              label: 'Collection'),
+              label: 'Badges'),
         ],
       ),
     );
@@ -690,8 +690,8 @@ class BrandDetailPage extends StatelessWidget {
   }
 }
 
-class ExplorePage extends StatelessWidget {
-  const ExplorePage({super.key, required this.service});
+class CollectionsPage extends StatelessWidget {
+  const CollectionsPage({super.key, required this.service});
   final CollectionService service;
   @override
   Widget build(BuildContext context) {
@@ -702,7 +702,8 @@ class ExplorePage extends StatelessWidget {
     final countries = badges.where((b) => b.kind == BadgeKind.country).toList();
     return ListView(children: [
       const _PageTitle(
-          title: 'Explore', subtitle: 'Find the brands still on your list.'),
+          title: 'Collections',
+          subtitle: 'Find the brands still on your list.'),
       _SetSection(
           title: 'Manufacturer collections', badges: makers, service: service),
       _SetSection(
@@ -846,8 +847,8 @@ class SetDetailPage extends StatelessWidget {
   }
 }
 
-class CollectionPage extends StatelessWidget {
-  const CollectionPage({super.key, required this.service});
+class BadgesPage extends StatelessWidget {
+  const BadgesPage({super.key, required this.service});
   final CollectionService service;
   @override
   Widget build(BuildContext context) {
@@ -855,8 +856,7 @@ class CollectionPage extends StatelessWidget {
     final earned = service.catalog.badges.where(service.isBadgeEarned).toList();
     final percent = total == 0 ? 0.0 : service.collectedCount / total;
     return ListView(children: [
-      const _PageTitle(
-          title: 'My collection', subtitle: 'Every sighting counts.'),
+      const _PageTitle(title: 'My badges', subtitle: 'Every sighting counts.'),
       Padding(
           padding: const EdgeInsets.all(16),
           child: Card(
@@ -872,16 +872,23 @@ class CollectionPage extends StatelessWidget {
                   ])))),
       Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text('Badges', style: Theme.of(context).textTheme.titleLarge)),
+          child: Text('Earned badges',
+              style: Theme.of(context).textTheme.titleLarge)),
       if (earned.isEmpty)
         const Padding(
             padding: EdgeInsets.all(24),
             child: Text(
                 'Complete a manufacturer or country set to earn your first badge.')),
       ...earned.map((badge) => ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.workspace_premium)),
+          leading: CircleAvatar(
+              key: Key('earned-badge-icon-${badge.id}'),
+              backgroundColor: _badgeGold,
+              foregroundColor: _onBadgeGold,
+              child: const Icon(Icons.workspace_premium)),
           title: Text(badge.title),
-          subtitle: const Text('Collection complete'))),
+          subtitle: Text('Collection complete',
+              key: Key('earned-badge-status-${badge.id}'),
+              style: const TextStyle(color: _badgeGoldText)))),
       Padding(
           padding: const EdgeInsets.fromLTRB(16, 22, 16, 8),
           child: Text('How it works',

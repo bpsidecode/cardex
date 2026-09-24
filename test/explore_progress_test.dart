@@ -123,9 +123,8 @@ class _Catalog implements CatalogRepository {
 }
 
 void main() {
-  testWidgets('Explore distinguishes all three collection progress states', (
-    tester,
-  ) async {
+  testWidgets('Collections distinguishes all three collection progress states',
+      (tester) async {
     final service = CollectionService(
       _Catalog(),
       _MemoryProgress(const ['complete-one', 'progress-one']),
@@ -134,7 +133,7 @@ void main() {
     addTearDown(service.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: ExplorePage(service: service))),
+      MaterialApp(home: Scaffold(body: CollectionsPage(service: service))),
     );
     await tester.tap(find.text('Manufacturer collections'));
     await tester.pumpAndSettle();
@@ -152,7 +151,7 @@ void main() {
     final notStartedIcon = tester.widget<CircleAvatar>(
       find.byKey(const Key('collection-icon-maker-not-started')),
     );
-    final context = tester.element(find.byType(ExplorePage));
+    final context = tester.element(find.byType(CollectionsPage));
     final colors = Theme.of(context).colorScheme;
 
     expect(completedIcon.backgroundColor, const Color(0xffd4af37));
@@ -175,5 +174,36 @@ void main() {
     expect(inProgress.color, colors.primary);
     expect(notStarted.value, 0);
     expect(notStarted.color, colors.outline);
+  });
+
+  testWidgets('Badges uses the completed gold styling for earned badges', (
+    tester,
+  ) async {
+    final service = CollectionService(
+      _Catalog(),
+      _MemoryProgress(const ['complete-one']),
+    );
+    await service.initialize();
+    addTearDown(service.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: BadgesPage(service: service))),
+    );
+
+    expect(find.text('My badges'), findsOneWidget);
+    expect(find.text('Earned badges'), findsOneWidget);
+    expect(find.text('Complete collection'), findsOneWidget);
+
+    final badgeIcon = tester.widget<CircleAvatar>(
+      find.byKey(const Key('earned-badge-icon-maker-complete')),
+    );
+    final badgeStatus = tester.widget<Text>(
+      find.byKey(const Key('earned-badge-status-maker-complete')),
+    );
+
+    expect(badgeIcon.backgroundColor, const Color(0xffd4af37));
+    expect(badgeIcon.foregroundColor, const Color(0xff302500));
+    expect(badgeStatus.data, 'Collection complete');
+    expect(badgeStatus.style?.color, const Color(0xff765800));
   });
 }
