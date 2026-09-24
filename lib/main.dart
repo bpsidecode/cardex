@@ -215,19 +215,10 @@ class BrandTile extends StatelessWidget {
 
           await service.toggle(brand);
           if (!context.mounted) return;
-          await Navigator.of(context).push(
-            PageRouteBuilder<void>(
-              transitionDuration: const Duration(milliseconds: 250),
-              reverseTransitionDuration: const Duration(milliseconds: 200),
-              pageBuilder: (_, animation, __) => _NewFindCelebration(
-                brand: brand,
-                service: service,
-              ),
-              transitionsBuilder: (_, animation, __, child) => FadeTransition(
-                opacity: animation,
-                child: child,
-              ),
-            ),
+          await _showNewFindCelebration(
+            context,
+            brand: brand,
+            service: service,
           );
         },
       ),
@@ -235,11 +226,38 @@ class BrandTile extends StatelessWidget {
   }
 }
 
+Future<void> _showNewFindCelebration(
+  BuildContext context, {
+  required CarBrand brand,
+  required CollectionService service,
+  bool returnToCurrentPage = false,
+}) =>
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 250),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (_, animation, __) => _NewFindCelebration(
+          brand: brand,
+          service: service,
+          returnToCurrentPage: returnToCurrentPage,
+        ),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          opacity: animation,
+          child: child,
+        ),
+      ),
+    );
+
 class _NewFindCelebration extends StatefulWidget {
-  const _NewFindCelebration({required this.brand, required this.service});
+  const _NewFindCelebration({
+    required this.brand,
+    required this.service,
+    required this.returnToCurrentPage,
+  });
 
   final CarBrand brand;
   final CollectionService service;
+  final bool returnToCurrentPage;
 
   @override
   State<_NewFindCelebration> createState() => _NewFindCelebrationState();
@@ -272,6 +290,10 @@ class _NewFindCelebrationState extends State<_NewFindCelebration>
 
   void _handleAnimationStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed || !mounted) return;
+    if (widget.returnToCurrentPage) {
+      Navigator.of(context).pop();
+      return;
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => BrandDetailPage(
@@ -479,7 +501,21 @@ class BrandDetailPage extends StatelessWidget {
           icon: Icon(collected ? Icons.undo : Icons.check),
           label: Text(
               collected ? 'Remove from collection' : 'I spotted ${brand.name}'),
-          onPressed: () => service.toggle(brand),
+          onPressed: () async {
+            if (collected) {
+              await service.toggle(brand);
+              return;
+            }
+
+            await service.toggle(brand);
+            if (!context.mounted) return;
+            await _showNewFindCelebration(
+              context,
+              brand: brand,
+              service: service,
+              returnToCurrentPage: true,
+            );
+          },
         ),
         if (collected && service.collectedAt(brand.id) != null)
           Padding(

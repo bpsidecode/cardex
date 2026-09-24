@@ -45,7 +45,9 @@ class _Catalog implements CatalogRepository {
 }
 
 void main() {
-  testWidgets('detail screen collects and removes a brand', (tester) async {
+  testWidgets('detail screen celebrates collecting and can remove a brand', (
+    tester,
+  ) async {
     const brand = CarBrand(
         id: 'lexus',
         name: 'Lexus',
@@ -63,8 +65,23 @@ void main() {
     expect(find.text('I spotted Lexus'), findsOneWidget);
     await tester.tap(find.text('I spotted Lexus'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
     expect(service.isCollected('lexus'), isTrue);
+    expect(find.byKey(const Key('new-find-celebration')), findsOneWidget);
+    expect(find.text('New find!'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1100));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('brand-detail-lexus')), findsOneWidget);
     expect(find.text('Remove from collection'), findsOneWidget);
+
+    await tester.tap(find.text('Remove from collection'));
+    await tester.pump();
+
+    expect(service.isCollected('lexus'), isFalse);
+    expect(find.text('I spotted Lexus'), findsOneWidget);
   });
 
   testWidgets('quick collect celebrates before opening brand details', (
