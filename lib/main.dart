@@ -5,6 +5,11 @@ import 'repositories/catalog_repository.dart';
 import 'repositories/progress_repository.dart';
 import 'services/collection_service.dart';
 
+const _badgeGold = Color(0xffd4af37);
+const _badgeGoldText = Color(0xff765800);
+const _badgeGoldContainer = Color(0xfffff3c4);
+const _onBadgeGold = Color(0xff302500);
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const CardexBootstrap());
@@ -213,11 +218,8 @@ class BrandTile extends StatelessWidget {
             return;
           }
 
-          final navigator = Navigator.of(context);
-          await service.toggle(brand);
-          if (!navigator.mounted) return;
-          await _showNewFindCelebration(
-            navigator,
+          await _collectAndCelebrate(
+            Navigator.of(context),
             brand: brand,
             service: service,
           );
@@ -227,10 +229,45 @@ class BrandTile extends StatelessWidget {
   }
 }
 
+Future<void> _collectAndCelebrate(
+  NavigatorState navigator, {
+  required CarBrand brand,
+  required CollectionService service,
+  bool returnToCurrentPage = false,
+}) async {
+  final earnedBefore = service.catalog.badges
+      .where(service.isBadgeEarned)
+      .map((badge) => badge.id)
+      .toSet();
+
+  await service.toggle(brand);
+  if (!navigator.mounted) return;
+
+  final newlyEarnedBadges = service.catalog.badges
+      .where(
+        (badge) =>
+            !earnedBefore.contains(badge.id) && service.isBadgeEarned(badge),
+      )
+      .toList()
+    ..sort((a, b) {
+      final kindComparison = a.kind.index.compareTo(b.kind.index);
+      return kindComparison != 0 ? kindComparison : a.title.compareTo(b.title);
+    });
+
+  await _showNewFindCelebration(
+    navigator,
+    brand: brand,
+    service: service,
+    newlyEarnedBadges: newlyEarnedBadges,
+    returnToCurrentPage: returnToCurrentPage,
+  );
+}
+
 Future<void> _showNewFindCelebration(
   NavigatorState navigator, {
   required CarBrand brand,
   required CollectionService service,
+  required List<Badge> newlyEarnedBadges,
   bool returnToCurrentPage = false,
 }) =>
     navigator.push(
@@ -240,6 +277,7 @@ Future<void> _showNewFindCelebration(
         pageBuilder: (_, animation, __) => _NewFindCelebration(
           brand: brand,
           service: service,
+          newlyEarnedBadges: newlyEarnedBadges,
           returnToCurrentPage: returnToCurrentPage,
         ),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(
@@ -253,11 +291,13 @@ class _NewFindCelebration extends StatefulWidget {
   const _NewFindCelebration({
     required this.brand,
     required this.service,
+    required this.newlyEarnedBadges,
     required this.returnToCurrentPage,
   });
 
   final CarBrand brand;
   final CollectionService service;
+  final List<Badge> newlyEarnedBadges;
   final bool returnToCurrentPage;
 
   @override
@@ -269,6 +309,7 @@ class _NewFindCelebrationState extends State<_NewFindCelebration>
   late final AnimationController _controller;
   late final Animation<double> _markScale;
   late final Animation<double> _contentOpacity;
+  bool _showingBadgeCelebration = false;
 
   @override
   void initState() {
@@ -291,6 +332,16 @@ class _NewFindCelebrationState extends State<_NewFindCelebration>
 
   void _handleAnimationStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed || !mounted) return;
+    if (!_showingBadgeCelebration && widget.newlyEarnedBadges.isNotEmpty) {
+      setState(() => _showingBadgeCelebration = true);
+      _controller.duration = const Duration(milliseconds: 1600);
+      _controller.forward(from: 0);
+      return;
+    }
+    _finishCelebration();
+  }
+
+  void _finishCelebration() {
     if (widget.returnToCurrentPage) {
       Navigator.of(context).pop();
       return;
@@ -316,6 +367,9 @@ class _NewFindCelebrationState extends State<_NewFindCelebration>
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    if (_showingBadgeCelebration) {
+      return _buildBadgeCelebration(context);
+    }
     return Scaffold(
       key: const Key('new-find-celebration'),
       backgroundColor: colors.primaryContainer,
@@ -402,6 +456,88 @@ class _NewFindCelebrationState extends State<_NewFindCelebration>
       ),
     );
   }
+
+  Widget _buildBadgeCelebration(BuildContext context) {
+    final multiple = widget.newlyEarnedBadges.length > 1;
+    return Scaffold(
+      key: const Key('badge-earned-celebration'),
+      backgroundColor: _badgeGoldContainer,
+      body: SafeArea(
+        child: Semantics(
+          liveRegion: true,
+          label: multiple
+              ? 'Badges earned: ${widget.newlyEarnedBadges.map((badge) => badge.title).join(', ')}'
+              : 'Badge earned: ${widget.newlyEarnedBadges.single.title}',
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (_, __) => CustomPaint(
+                  painter: _CelebrationPainter(
+                    progress: _controller.value,
+                    color: _badgeGold,
+                    accentColor: _badgeGoldText,
+                  ),
+                ),
+              ),
+              Center(
+                child: FadeTransition(
+                  opacity: _contentOpacity,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ScaleTransition(
+                          scale: _markScale,
+                          child: const CircleAvatar(
+                            radius: 68,
+                            backgroundColor: _badgeGold,
+                            foregroundColor: _onBadgeGold,
+                            child: Icon(Icons.workspace_premium, size: 86),
+                          ),
+                        ),
+                        const SizedBox(height: 36),
+                        Text(
+                          multiple ? 'Badges earned!' : 'Badge earned!',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
+                                color: _onBadgeGold,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        ...widget.newlyEarnedBadges.map(
+                          (badge) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Text(
+                              badge.title,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    color: _onBadgeGold,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CelebrationPainter extends CustomPainter {
@@ -468,6 +604,16 @@ class BrandDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final country = service.catalog.country(brand.originCountryId);
     final group = service.catalog.group(brand.groupId);
+    final countryBadge = service.catalog.badges.firstWhere(
+      (badge) =>
+          badge.kind == BadgeKind.country &&
+          badge.subjectId == brand.originCountryId,
+    );
+    final manufacturerBadge = service.catalog.badges.firstWhere(
+      (badge) =>
+          badge.kind == BadgeKind.manufacturer &&
+          badge.subjectId == brand.groupId,
+    );
     final collected = service.isCollected(brand.id);
     return Scaffold(
       key: Key('brand-detail-${brand.id}'),
@@ -492,11 +638,27 @@ class BrandDetailPage extends StatelessWidget {
         _Fact(
             icon: Icons.public_outlined,
             label: 'Brand origin',
-            value: '${country.flag} ${country.name}'),
+            value: '${country.flag} ${country.name}',
+            onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => SetDetailPage(
+                      badge: countryBadge,
+                      service: service,
+                    ),
+                  ),
+                )),
         _Fact(
             icon: Icons.account_tree_outlined,
             label: 'Current parent',
-            value: group.name),
+            value: group.name,
+            onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => SetDetailPage(
+                      badge: manufacturerBadge,
+                      service: service,
+                    ),
+                  ),
+                )),
         const SizedBox(height: 24),
         FilledButton.icon(
           icon: Icon(collected ? Icons.undo : Icons.check),
@@ -508,11 +670,8 @@ class BrandDetailPage extends StatelessWidget {
               return;
             }
 
-            final navigator = Navigator.of(context);
-            await service.toggle(brand);
-            if (!navigator.mounted) return;
-            await _showNewFindCelebration(
-              navigator,
+            await _collectAndCelebrate(
+              Navigator.of(context),
               brand: brand,
               service: service,
               returnToCurrentPage: true,
@@ -568,22 +727,71 @@ class _SetSection extends StatelessWidget {
             ...badges.map((badge) {
               final all = service.brandsForBadge(badge);
               final missing = service.missingForBadge(badge);
-              final earned = service.isBadgeEarned(badge);
+              final collectedCount = all.length - missing.length;
+              final state = service.isBadgeEarned(badge)
+                  ? _CollectionProgressState.completed
+                  : collectedCount == 0
+                      ? _CollectionProgressState.notStarted
+                      : _CollectionProgressState.inProgress;
+              final colors = Theme.of(context).colorScheme;
+              final statusText = switch (state) {
+                _CollectionProgressState.completed => 'Badge earned',
+                _CollectionProgressState.inProgress =>
+                  '${missing.length} brand${missing.length == 1 ? '' : 's'} to find',
+                _CollectionProgressState.notStarted =>
+                  'Not started · ${missing.length} brand${missing.length == 1 ? '' : 's'} to find',
+              };
+              final statusColor = switch (state) {
+                _CollectionProgressState.completed => _badgeGoldText,
+                _CollectionProgressState.inProgress => null,
+                _CollectionProgressState.notStarted => colors.onSurfaceVariant,
+              };
+              final progressColor = switch (state) {
+                _CollectionProgressState.completed => _badgeGold,
+                _CollectionProgressState.inProgress => colors.primary,
+                _CollectionProgressState.notStarted => colors.outline,
+              };
               return ListTile(
+                key: Key('collection-row-${badge.id}'),
                 leading: CircleAvatar(
-                    child: Icon(earned
+                  key: Key('collection-icon-${badge.id}'),
+                  backgroundColor: switch (state) {
+                    _CollectionProgressState.completed => _badgeGold,
+                    _CollectionProgressState.inProgress => null,
+                    _CollectionProgressState.notStarted =>
+                      colors.surfaceContainerHighest,
+                  },
+                  foregroundColor: switch (state) {
+                    _CollectionProgressState.completed => _onBadgeGold,
+                    _CollectionProgressState.inProgress => null,
+                    _CollectionProgressState.notStarted =>
+                      colors.onSurfaceVariant,
+                  },
+                  child: Icon(
+                    state == _CollectionProgressState.completed
                         ? Icons.workspace_premium
-                        : Icons.flag_outlined)),
+                        : Icons.flag_outlined,
+                  ),
+                ),
                 title: Text(badge.title),
                 subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(earned
-                          ? 'Badge earned'
-                          : '${missing.length} brand${missing.length == 1 ? '' : 's'} to find'),
+                      Text(
+                        statusText,
+                        key: Key('collection-status-${badge.id}'),
+                        style: TextStyle(color: statusColor),
+                      ),
                       const SizedBox(height: 5),
                       LinearProgressIndicator(
-                          value: (all.length - missing.length) / all.length),
+                        key: Key('collection-progress-${badge.id}'),
+                        value: all.isEmpty ? 0 : collectedCount / all.length,
+                        color: progressColor,
+                        backgroundColor:
+                            state == _CollectionProgressState.notStarted
+                                ? colors.surfaceContainerHighest
+                                : null,
+                      ),
                     ]),
                 isThreeLine: true,
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(
@@ -593,6 +801,8 @@ class _SetSection extends StatelessWidget {
             }),
           ]);
 }
+
+enum _CollectionProgressState { completed, inProgress, notStarted }
 
 class SetDetailPage extends StatelessWidget {
   const SetDetailPage({super.key, required this.badge, required this.service});
@@ -721,16 +931,25 @@ class _PageTitle extends StatelessWidget {
 }
 
 class _Fact extends StatelessWidget {
-  const _Fact({required this.icon, required this.label, required this.value});
+  const _Fact({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.onTap,
+  });
   final IconData icon;
   final String label;
   final String value;
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) => ListTile(
+      key: Key('brand-fact-${label.toLowerCase().replaceAll(' ', '-')}'),
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon),
       title: Text(label),
-      subtitle: Text(value));
+      subtitle: Text(value),
+      trailing: onTap == null ? null : const Icon(Icons.chevron_right),
+      onTap: onTap);
 }
 
 String _date(DateTime value) =>

@@ -22,12 +22,14 @@ class _MemoryProgress implements ProgressRepository {
 }
 
 class _Catalog implements CatalogRepository {
-  _Catalog(this.brandItem);
+  _Catalog(this.brandItem, {this.companionBrand});
   final CarBrand brandItem;
+  final CarBrand? companionBrand;
   @override
   int get version => 1;
   @override
-  List<CarBrand> get brands => [brandItem];
+  List<CarBrand> get brands =>
+      [brandItem, if (companionBrand != null) companionBrand!];
   @override
   List<ManufacturerGroup> get groups =>
       const [ManufacturerGroup(id: 'toyota', name: 'Toyota Motor Corporation')];
@@ -35,7 +37,20 @@ class _Catalog implements CatalogRepository {
   List<OriginCountry> get countries =>
       const [OriginCountry(id: 'jp', name: 'Japan', flag: '🇯🇵')];
   @override
-  List<Badge> get badges => const [];
+  List<Badge> get badges => const [
+        Badge(
+          id: 'maker-toyota',
+          title: 'Toyota collection',
+          kind: BadgeKind.manufacturer,
+          subjectId: 'toyota',
+        ),
+        Badge(
+          id: 'country-jp',
+          title: 'Japan collection',
+          kind: BadgeKind.country,
+          subjectId: 'jp',
+        ),
+      ];
   @override
   CarBrand brand(String id) => brandItem;
   @override
@@ -72,6 +87,13 @@ void main() {
     expect(find.text('New find!'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 1100));
+
+    expect(find.byKey(const Key('badge-earned-celebration')), findsOneWidget);
+    expect(find.text('Badges earned!'), findsOneWidget);
+    expect(find.text('Toyota collection'), findsOneWidget);
+    expect(find.text('Japan collection'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1600));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('brand-detail-lexus')), findsOneWidget);
@@ -112,10 +134,92 @@ void main() {
     expect(find.text('New find!'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 1100));
+
+    expect(find.byKey(const Key('badge-earned-celebration')), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1600));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('brand-detail-lexus')), findsOneWidget);
     expect(find.text('Toyota luxury marque.'), findsOneWidget);
     expect(find.text('Remove from collection'), findsOneWidget);
+  });
+
+  testWidgets('collect without a completed badge keeps the existing flow', (
+    tester,
+  ) async {
+    const brand = CarBrand(
+      id: 'lexus',
+      name: 'Lexus',
+      foundedYear: 1989,
+      originCountryId: 'jp',
+      groupId: 'toyota',
+      description: 'Toyota luxury marque.',
+    );
+    const companion = CarBrand(
+      id: 'toyota',
+      name: 'Toyota',
+      foundedYear: 1937,
+      originCountryId: 'jp',
+      groupId: 'toyota',
+      description: 'Japanese automaker.',
+    );
+    final service = CollectionService(
+      _Catalog(brand, companionBrand: companion),
+      _MemoryProgress(),
+    );
+    await service.initialize();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: BrandTile(brand: brand, service: service)),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Collect Lexus'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byKey(const Key('new-find-celebration')), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 1100));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('badge-earned-celebration')), findsNothing);
+    expect(find.byKey(const Key('brand-detail-lexus')), findsOneWidget);
+  });
+
+  testWidgets('origin and parent facts open their collection progress pages', (
+    tester,
+  ) async {
+    const brand = CarBrand(
+      id: 'lexus',
+      name: 'Lexus',
+      foundedYear: 1989,
+      originCountryId: 'jp',
+      groupId: 'toyota',
+      description: 'Toyota luxury marque.',
+    );
+    final service = CollectionService(_Catalog(brand), _MemoryProgress());
+    await service.initialize();
+    await tester.pumpWidget(
+      MaterialApp(home: BrandDetailPage(brand: brand, service: service)),
+    );
+
+    final founded = tester.widget<ListTile>(
+      find.byKey(const Key('brand-fact-founded')),
+    );
+    expect(founded.onTap, isNull);
+    expect(founded.trailing, isNull);
+
+    await tester.tap(find.byKey(const Key('brand-fact-brand-origin')));
+    await tester.pumpAndSettle();
+    expect(find.text('Japan collection'), findsWidgets);
+    expect(find.text('1 brand still missing'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('brand-fact-current-parent')));
+    await tester.pumpAndSettle();
+    expect(find.text('Toyota collection'), findsWidgets);
+    expect(find.text('1 brand still missing'), findsOneWidget);
   });
 }
